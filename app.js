@@ -28,7 +28,7 @@ const userState = new botbuilder_1.UserState(storage);
 // Add conversation state middleware
 const conversationState = new botbuilder_1.ConversationState(new botbuilder_1.MemoryStorage());
 adapter.use(conversationState);
-function Welcome(context) {
+function isWelcome(context) {
     if (context.activity.type === 'conversationUpdate' && context.activity.membersAdded[0].name !== 'Bot') {
         return true;
     }
@@ -53,7 +53,7 @@ server.post('/api/messages', (req, res) => {
     // Route received request to adapter for processing
     adapter.processActivity(req, res, (context) => __awaiter(this, void 0, void 0, function* () {
         const state = conversationState.get(context);
-        if (Welcome(context)) {
+        if (isWelcome(context)) {
             yield context.sendActivity(welcomeMessage);
             yield context.sendActivity(questionMessage);
         }
