@@ -46,7 +46,7 @@ function responseCheck(text) {
             return false;
     }
 }
-const questionMessage = MessageFactory.suggestedActions(['red', 'green', 'blue'], 'How would you like to explore the event?');
+const questionMessage = MessageFactory.suggestedActions(['FAQs', 'Band Search', 'Navigate'], 'How would you like to explore the event?');
 const welcomeMessage = "Hey there! I'm the ASH Music Festival Bot. I'm here to guide you around the festival!";
 // Listen for incoming requests 
 server.post('/api/messages', (req, res) => {
@@ -57,11 +57,8 @@ server.post('/api/messages', (req, res) => {
             yield context.sendActivity(welcomeMessage);
             yield context.sendActivity(questionMessage);
         }
-        if (context.activity.type === 'message') {
-            var response = context.activity.text;
-            if (responseCheck(response)) {
-                yield context.sendActivity(`You clicked the ${response} button!`);
-            }
+        if (context.activity.type === 'message' && responseCheck(context.activity.text)) {
+            yield context.sendActivity(`You clicked the ${context.activity.text} button!`);
         }
     }));
 });
