@@ -18,8 +18,8 @@ server.listen(process.env.port || process.env.PORT || 3978, function () {
 });
 // Create adapter
 const adapter = new botbuilder_1.BotFrameworkAdapter({
-    appId: process.env.MICROSOFT_APP_ID,
-    appPassword: process.env.MICROSOFT_APP_PASSWORD
+//appId: "34a301f2-dd02-4c1d-ad38-e4f81d5354e0",
+//appPassword: "avpUW952=?:-ffhqZJZKA92"
 });
 // Add state middleware
 const storage = new botbuilder_1.MemoryStorage();
@@ -46,19 +46,59 @@ function responseCheck(text) {
             return false;
     }
 }
+function refreshBot(state) {
+    state.questionText = '';
+    state.correctAnswer = false;
+    state.menuFlag = false;
+    state.FAQFlag = false;
+    state.questionFlag = false;
+    state.answerFlag = false;
+}
 const questionMessage = MessageFactory.suggestedActions(['FAQs', 'Band Search', 'Navigate'], 'How would you like to explore the event?');
 const welcomeMessage = "Hey there! I'm the ASH Music Festival Bot. I'm here to guide you around the festival!";
+const confirmMessage = MessageFactory.suggestedActions(['Yes', 'No'], 'Was this the answer you were looking for?');
 // Listen for incoming requests 
 server.post('/api/messages', (req, res) => {
     // Route received request to adapter for processing
     adapter.processActivity(req, res, (context) => __awaiter(this, void 0, void 0, function* () {
         const state = conversationState.get(context);
         if (isWelcome(context)) {
+            state.menuFlag = true;
+        }
+        if (state.menuFlag) {
             yield context.sendActivity(welcomeMessage);
             yield context.sendActivity(questionMessage);
+            state.menuFlag = false;
         }
-        if (context.activity.type === 'message' && responseCheck(context.activity.text)) {
-            yield context.sendActivity(`You clicked the ${context.activity.text} button!`);
+        else if (state.FAQFlag) { //
+            if (state.questionFlag) {
+                state.questionText = context.activity.text;
+                //send question and receive answer
+                yield context.sendActivity(`Answer`);
+                yield context.sendActivity(confirmMessage);
+                state.answerFlag = true;
+                state.questionFlag = false;
+            }
+            else if (state.answerFlag) {
+                var confirmation = context.activity.text;
+                if (confirmation === 'Yes') {
+                    yield context.sendActivity("Great! I'll make a note that this is the right answer to your question");
+                    //store
+                }
+                else {
+                    yield context.sendActivity("Sorry to hear that! I'll yse your feedback to better answer your questions in the future!");
+                    //store
+                }
+                refreshBot(state);
+                yield context.sendActivity(questionMessage);
+            }
+        }
+        else if (context.activity.type === 'message' && responseCheck(context.activity.text)) {
+            if (context.activity.text === 'FAQs') {
+                yield context.sendActivity("Ask me questions about the festival and I'll do my best to answer!");
+                state.FAQFlag = true;
+                state.questionFlag = true;
+            }
         }
     }));
 });
