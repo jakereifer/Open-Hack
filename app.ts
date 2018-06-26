@@ -3,7 +3,8 @@ import * as restify from 'restify';
 import { STATUS_CODES } from 'http';
 import { Context } from 'vm';
 const { MessageFactory } = require('botbuilder');
-
+require('es6-promise').polyfill();
+require('isomorphic-fetch');
 
 // Create server
 let server = restify.createServer();
@@ -70,13 +71,41 @@ interface C1State {
     questionFlag: boolean;
     answerFlag: boolean;
 }
+const qnaURL : string = "https://openhackqnamaker.azurewebsites.net/qnamaker/knowledgebases/df82db7b-3e22-4d25-9e27-9055d64b6b8c/generateAnswer";
+
+async function processQuestion(q: string) : Promise<string> {
+    var person : string = await fetch(qnaURL, {
+        method: 'POST',
+        headers: {
+            'Content-type': 'application/json',
+            'Authorization': 'EndpointKey 3dab1dab-73ae-498e-b2de-dd7126b42207'
+        },
+        body: JSON.stringify({'question':`${q}`}),
+    })
+    .then(function (response) {
+        return response.json();
+    })
+    .then(function (response) {
+        return response.answers[0].answer;
+    });
+    return Promise.resolve(person);
+}
+
 
 // Listen for incoming requests 
 server.post('/api/messages', (req, res) => {
     // Route received request to adapter for processing
     adapter.processActivity(req, res, async (context) => {
         const state = conversationState.get(context);
-        if (isWelcome(context)) {
+        
+/*
+POST /knowledgebases/df82db7b-3e22-4d25-9e27-9055d64b6b8c/generateAnswer
+Host: https://openhackqnamaker.azurewebsites.net/qnamaker
+Authorization: EndpointKey 3dab1dab-73ae-498e-b2de-dd7126b42207
+Content-Type: application/json
+{"question":"When is the festival"}
+*/
+if (isWelcome(context)) {
             state.menuFlag = true;
         }
         if (state.menuFlag) {
@@ -88,7 +117,8 @@ server.post('/api/messages', (req, res) => {
             if (state.questionFlag) {
                 state.questionText = context.activity.text;
                 //send question and receive answer
-                await context.sendActivity(`Answer`);
+                var a : string = await processQuestion(state.questionText);
+                await context.sendActivity(a);
                 await context.sendActivity(confirmMessage);
                 state.answerFlag = true;
                 state.questionFlag = false;

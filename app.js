@@ -11,6 +11,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const botbuilder_1 = require("botbuilder");
 const restify = require("restify");
 const { MessageFactory } = require('botbuilder');
+require('es6-promise').polyfill();
+require('isomorphic-fetch');
 // Create server
 let server = restify.createServer();
 server.listen(process.env.port || process.env.PORT || 3978, function () {
@@ -57,11 +59,38 @@ function refreshBot(state) {
 const questionMessage = MessageFactory.suggestedActions(['FAQs', 'Band Search', 'Navigate'], 'How would you like to explore the event?');
 const welcomeMessage = "Hey there! I'm the ASH Music Festival Bot. I'm here to guide you around the festival!";
 const confirmMessage = MessageFactory.suggestedActions(['Yes', 'No'], 'Was this the answer you were looking for?');
+const qnaURL = "https://openhackqnamaker.azurewebsites.net/qnamaker/knowledgebases/df82db7b-3e22-4d25-9e27-9055d64b6b8c/generateAnswer";
+function processQuestion(q) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var person = yield fetch(qnaURL, {
+            method: 'POST',
+            headers: {
+                'Content-type': 'application/json',
+                'Authorization': 'EndpointKey 3dab1dab-73ae-498e-b2de-dd7126b42207'
+            },
+            body: JSON.stringify({ 'question': `${q}` }),
+        })
+            .then(function (response) {
+            return response.json();
+        })
+            .then(function (response) {
+            return response.answers[0].answer;
+        });
+        return Promise.resolve(person);
+    });
+}
 // Listen for incoming requests 
 server.post('/api/messages', (req, res) => {
     // Route received request to adapter for processing
     adapter.processActivity(req, res, (context) => __awaiter(this, void 0, void 0, function* () {
         const state = conversationState.get(context);
+        /*
+        POST /knowledgebases/df82db7b-3e22-4d25-9e27-9055d64b6b8c/generateAnswer
+        Host: https://openhackqnamaker.azurewebsites.net/qnamaker
+        Authorization: EndpointKey 3dab1dab-73ae-498e-b2de-dd7126b42207
+        Content-Type: application/json
+        {"question":"When is the festival"}
+        */
         if (isWelcome(context)) {
             state.menuFlag = true;
         }
@@ -74,7 +103,8 @@ server.post('/api/messages', (req, res) => {
             if (state.questionFlag) {
                 state.questionText = context.activity.text;
                 //send question and receive answer
-                yield context.sendActivity(`Answer`);
+                var a = yield processQuestion(state.questionText);
+                yield context.sendActivity(a);
                 yield context.sendActivity(confirmMessage);
                 state.answerFlag = true;
                 state.questionFlag = false;
