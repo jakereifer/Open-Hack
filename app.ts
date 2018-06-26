@@ -92,12 +92,6 @@ async function processQuestion(q: string) : Promise<string> {
 }
 
 
-// Listen for incoming requests 
-server.post('/api/messages', (req, res) => {
-    // Route received request to adapter for processing
-    adapter.processActivity(req, res, async (context) => {
-        const state = conversationState.get(context);
-        
 /*
 POST /knowledgebases/df82db7b-3e22-4d25-9e27-9055d64b6b8c/generateAnswer
 Host: https://openhackqnamaker.azurewebsites.net/qnamaker
@@ -105,7 +99,14 @@ Authorization: EndpointKey 3dab1dab-73ae-498e-b2de-dd7126b42207
 Content-Type: application/json
 {"question":"When is the festival"}
 */
-if (isWelcome(context)) {
+
+
+// Listen for incoming requests 
+server.post('/api/messages', (req, res) => {
+    // Route received request to adapter for processing
+    adapter.processActivity(req, res, async (context) => {
+        const state = conversationState.get(context);
+        if (isWelcome(context)) {
             state.menuFlag = true;
         }
         if (state.menuFlag) {
