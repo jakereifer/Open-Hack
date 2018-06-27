@@ -5,6 +5,7 @@ import { Context } from 'vm';
 const { MessageFactory } = require('botbuilder');
 require('es6-promise').polyfill();
 require('isomorphic-fetch');
+var azure = require('azure-storage');
 
 // Create server
 let server = restify.createServer();
@@ -27,12 +28,21 @@ const userState = new UserState(storage);
 const conversationState = new ConversationState<C1State>(new MemoryStorage());
 adapter.use(conversationState);
 
+var tableSvc = azure.createTableService('openhack3', 'GAhqDdVI1y2Ezaf6qB+318sGC3TnUn0o8foTjaCwzeEKK+HdscY8nVO9qDfO+cwu5TeqsMQlrk/DjIyFDa5toQ==');
+tableSvc.createTableIfNotExists('mytable', function(error, result, response){
+    if(!error){
+        console.log('Successfully added or found table!');
+    }
+});
+var entGen = azure.TableUtilities.entityGenerator;
+
 function isWelcome(context: TurnContext): boolean {
     if (context.activity.type === 'conversationUpdate' && context.activity.membersAdded[0].name !== 'Bot') {
         return true;
     }
     return false;
 }
+
 
 function responseCheck(text: string): boolean {
     switch (text) {
@@ -49,6 +59,7 @@ function responseCheck(text: string): boolean {
 
 function refreshBot(state: C1State): void {
     state.questionText = '';
+    state.answerText = '';
     state.correctAnswer = false;
     state.menuFlag = false;
     state.FAQFlag = false;
@@ -60,12 +71,14 @@ const questionMessage = MessageFactory.suggestedActions(['FAQs', 'Band Search', 
 const welcomeMessage = "Hey there! I'm the ASH Music Festival Bot. I'm here to guide you around the festival!";
 const confirmMessage = MessageFactory.suggestedActions(['Yes', 'No'], 'Was this the answer you were looking for?')
 
+
 // Define conversation state shape
 interface C1State {
     count: number;
     questionText: string;
+    answerText: string;
     correctAnswer: boolean;
-    
+    //flags
     menuFlag: boolean;
     FAQFlag: boolean;
     questionFlag: boolean;
@@ -119,6 +132,7 @@ server.post('/api/messages', (req, res) => {
                 state.questionText = context.activity.text;
                 //send question and receive answer
                 var a : string = await processQuestion(state.questionText);
+                state.answerText = a;
                 await context.sendActivity(a);
                 await context.sendActivity(confirmMessage);
                 state.answerFlag = true;
@@ -126,14 +140,27 @@ server.post('/api/messages', (req, res) => {
             }
             else if (state.answerFlag) {
                 var confirmation : string = context.activity.text;
+                var confirmationBool : boolean;
                 if (confirmation === 'Yes') {
                     await context.sendActivity("Great! I'll make a note that this is the right answer to your question");
-                    //store
+                    confirmationBool = true;
                 } 
                 else {
                     await context.sendActivity("Sorry to hear that! I'll yse your feedback to better answer your questions in the future!");
-                    //store
+                    confirmationBool = false;
                 }
+                var storageEntity = {
+                    PartitionKey: {'_':'FAQs'},
+                    RowKey: {'_': Date.now().toString()},
+                    question: {'_':`${state.questionText}`},
+                    answer: {'_':`${state.answerText}`},
+                    goodResponse: {'_':`${confirmationBool}`, '$':'Edm.Boolean'},
+                };
+                tableSvc.insertEntity('mytable', storageEntity, function (error, result, response) {
+                    if(!error) {
+                        console.log("successfully added");
+                    }
+                })
                 refreshBot(state);
                 await context.sendActivity(questionMessage);             
             }
