@@ -6,6 +6,7 @@ const { MessageFactory } = require('botbuilder');
 require('es6-promise').polyfill();
 require('isomorphic-fetch');
 var azure = require('azure-storage');
+const botbuilder_dialogs = require('botbuilder-dialogs');
 
 // Create server
 let server = restify.createServer();
