@@ -2,10 +2,10 @@
     "compilerOptions": {
         "module": "commonjs",
         "target": "es6",
-        "outDir": "./",
+        "outDir": "./lib",
         "noImplicitAny": false
     },
     "files": [
-        "app.ts"
+        "./src/app.ts"
     ]
 }
