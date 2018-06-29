@@ -1,6 +1,7 @@
 {
     "name": "sample",
     "dependencies": {
+        "azure-search": "0.0.20",
         "azure-storage": "^2.10.0",
         "botbuilder": "^4.0.0-preview1.1",
         "botbuilder-dialogs": "^4.0.0-preview1.2",

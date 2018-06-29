@@ -9,8 +9,8 @@ var azure = require('azure-storage');
 const botbuilder_dialogs = require('botbuilder-dialogs');
 import { DialogSet } from 'botbuilder-dialogs';
 const {CardFactory} = require('botbuilder');
-
-
+var AzureSearch = require('azure-search');
+var dia = require("./dialogs");
 // Create server
 let server = restify.createServer();
 server.listen(process.env.port || process.env.PORT || 3978, function () {
@@ -120,13 +120,43 @@ async function processQuestion(q: string): Promise<string> {
     return Promise.resolve(person);
 }
 
-/*
-POST /knowledgebases/df82db7b-3e22-4d25-9e27-9055d64b6b8c/generateAnswer
-Host: https://openhackqnamaker.azurewebsites.net/qnamaker
-Authorization: EndpointKey 3dab1dab-73ae-498e-b2de-dd7126b42207
-Content-Type: application/json
-{"question":"When is the festival"}
-*/
+const questionURL = 'https://openhackqnamaker-asbj2jawqzgtejk.search.windows.net/indexes/my-target-index/docs?api-version=2016-09-01&search=Milk';
+
+interface SearchAnswer {
+    "@odata.context": string;
+    value: Band[];
+}
+interface Band {
+    "@search.score": string,
+    "eventId": string,
+    "bandName":string,
+    "genre": string,
+    "imageUrl": string,
+    "description":string,
+    "stage": string,
+    "startTime": string,
+    "endTime": string,
+    "day":string,
+    "date": string
+}
+
+async function bandSearch(): Promise<SearchAnswer> {
+    var person: SearchAnswer = await fetch(questionURL, {
+        method: 'GET',
+        headers: {
+            'api-key': "D4BD28224DB0862A9819C003C5D90F5B"
+        },
+        body:'',
+    })
+        .then(function (response) {
+            return response.json();
+        })
+    return Promise.resolve(person);
+}
+
+
+
+
 
 
 // Listen for incoming requests 
@@ -138,6 +168,9 @@ server.post('/api/messages', (req, res) => {
         if (isWelcome(context)) {
             state.menuFlag = true;
             await context.sendActivity(welcomeMessage);
+            var searchResult = await bandSearch();
+            console.log(searchResult.value);
+            await context.sendActivity(searchResult.value[0].bandName);
             await dc.begin('MainMenuDialog');
         }
         if (!context.responded) {
@@ -145,6 +178,46 @@ server.post('/api/messages', (req, res) => {
         }
     });
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 //Dialogs
 const dialogs = new DialogSet();
