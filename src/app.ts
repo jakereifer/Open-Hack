@@ -1,12 +1,15 @@
 import { BotFrameworkAdapter, MemoryStorage, UserState, ConversationState, TurnContext } from 'botbuilder';
 import * as restify from 'restify';
 import { STATUS_CODES } from 'http';
-import { Context } from 'vm';
+import { Context, isContext } from 'vm';
 const { MessageFactory } = require('botbuilder');
 require('es6-promise').polyfill();
 require('isomorphic-fetch');
 var azure = require('azure-storage');
 const botbuilder_dialogs = require('botbuilder-dialogs');
+import { DialogSet } from 'botbuilder-dialogs';
+const {CardFactory} = require('botbuilder');
+
 
 // Create server
 let server = restify.createServer();
@@ -30,8 +33,8 @@ const conversationState = new ConversationState<C1State>(new MemoryStorage());
 adapter.use(conversationState);
 
 var tableSvc = azure.createTableService('openhack3', 'GAhqDdVI1y2Ezaf6qB+318sGC3TnUn0o8foTjaCwzeEKK+HdscY8nVO9qDfO+cwu5TeqsMQlrk/DjIyFDa5toQ==');
-tableSvc.createTableIfNotExists('mytable', function(error, result, response){
-    if(!error){
+tableSvc.createTableIfNotExists('mytable', function (error, result, response) {
+    if (!error) {
         console.log('Successfully added or found table!');
     }
 });
@@ -43,7 +46,6 @@ function isWelcome(context: TurnContext): boolean {
     }
     return false;
 }
-
 
 function responseCheck(text: string): boolean {
     switch (text) {
@@ -72,7 +74,20 @@ const questionMessage = MessageFactory.suggestedActions(['FAQs', 'Band Search', 
 const welcomeMessage = "Hey there! I'm the ASH Music Festival Bot. I'm here to guide you around the festival!";
 const confirmMessage = MessageFactory.suggestedActions(['Yes', 'No'], 'Was this the answer you were looking for?')
 
-
+function addFAQ(q: string, a: string, gr: boolean) {
+    var storageEntity = {
+        PartitionKey: { '_': 'FAQs' },
+        RowKey: { '_': Date.now().toString() },
+        question: { '_': `${q}` },
+        answer: { '_': `${a}` },
+        goodResponse: { '_': `${gr}`, '$': 'Edm.Boolean' },
+    };
+    tableSvc.insertEntity('mytable', storageEntity, function (error, result, response) {
+        if (!error) {
+            console.log("successfully added");
+        }
+    })
+}
 // Define conversation state shape
 interface C1State {
     count: number;
@@ -85,26 +100,25 @@ interface C1State {
     questionFlag: boolean;
     answerFlag: boolean;
 }
-const qnaURL : string = "https://openhackqnamaker.azurewebsites.net/qnamaker/knowledgebases/df82db7b-3e22-4d25-9e27-9055d64b6b8c/generateAnswer";
+const qnaURL: string = "https://openhackqnamaker.azurewebsites.net/qnamaker/knowledgebases/df82db7b-3e22-4d25-9e27-9055d64b6b8c/generateAnswer";
 
-async function processQuestion(q: string) : Promise<string> {
-    var person : string = await fetch(qnaURL, {
+async function processQuestion(q: string): Promise<string> {
+    var person: string = await fetch(qnaURL, {
         method: 'POST',
         headers: {
             'Content-type': 'application/json',
             'Authorization': 'EndpointKey 3dab1dab-73ae-498e-b2de-dd7126b42207'
         },
-        body: JSON.stringify({'question':`${q}`}),
+        body: JSON.stringify({ 'question': `${q}` }),
     })
-    .then(function (response) {
-        return response.json();
-    })
-    .then(function (response) {
-        return response.answers[0].answer;
-    });
+        .then(function (response) {
+            return response.json();
+        })
+        .then(function (response) {
+            return response.answers[0].answer;
+        });
     return Promise.resolve(person);
 }
-
 
 /*
 POST /knowledgebases/df82db7b-3e22-4d25-9e27-9055d64b6b8c/generateAnswer
@@ -120,58 +134,80 @@ server.post('/api/messages', (req, res) => {
     // Route received request to adapter for processing
     adapter.processActivity(req, res, async (context) => {
         const state = conversationState.get(context);
+        const dc = dialogs.createContext(context, state);
         if (isWelcome(context)) {
             state.menuFlag = true;
-        }
-        if (state.menuFlag) {
             await context.sendActivity(welcomeMessage);
-            await context.sendActivity(questionMessage);
-            state.menuFlag = false;
+            await dc.begin('MainMenuDialog');
         }
-        else if (state.FAQFlag) {//
-            if (state.questionFlag) {
-                state.questionText = context.activity.text;
-                //send question and receive answer
-                var a : string = await processQuestion(state.questionText);
-                state.answerText = a;
-                await context.sendActivity(a);
-                await context.sendActivity(confirmMessage);
-                state.answerFlag = true;
-                state.questionFlag = false;
-            }
-            else if (state.answerFlag) {
-                var confirmation : string = context.activity.text;
-                var confirmationBool : boolean;
-                if (confirmation === 'Yes') {
-                    await context.sendActivity("Great! I'll make a note that this is the right answer to your question");
-                    confirmationBool = true;
-                } 
-                else {
-                    await context.sendActivity("Sorry to hear that! I'll yse your feedback to better answer your questions in the future!");
-                    confirmationBool = false;
-                }
-                var storageEntity = {
-                    PartitionKey: {'_':'FAQs'},
-                    RowKey: {'_': Date.now().toString()},
-                    question: {'_':`${state.questionText}`},
-                    answer: {'_':`${state.answerText}`},
-                    goodResponse: {'_':`${confirmationBool}`, '$':'Edm.Boolean'},
-                };
-                tableSvc.insertEntity('mytable', storageEntity, function (error, result, response) {
-                    if(!error) {
-                        console.log("successfully added");
-                    }
-                })
-                refreshBot(state);
-                await context.sendActivity(questionMessage);             
-            }
-        }
-        else if (context.activity.type === 'message' && responseCheck(context.activity.text)) {
-            if (context.activity.text === 'FAQs') {
-                await context.sendActivity("Ask me questions about the festival and I'll do my best to answer!");
-                state.FAQFlag = true;
-                state.questionFlag = true;
-            }
+        if (!context.responded) {
+            await dc.continue();
         }
     });
 });
+
+//Dialogs
+const dialogs = new DialogSet();
+dialogs.add('FAQDialog', [
+    async function (dc) {
+        await dc.prompt('textPrompt', "Ask me questions about the festival and I'll do my best to answer!");
+    },
+    async function (dc, results) {
+        var state = conversationState.get(dc.context);
+        state.questionText = results;
+        var answer = await processQuestion(results);
+        state.answerText = answer;
+        await dc.context.sendActivity(answer);
+        await dc.prompt('choicePrompt', 'Was this the answer you are looking for?', ['Yes', 'No'], { retryPrompt: 'Was this the answer you are looking for?' });
+    },
+    async function (dc, results) {
+        var state = conversationState.get(dc.context);
+        if (results.value === 'Yes') {
+            state.correctAnswer = true;
+            await dc.context.sendActivity("Great! I'll make a note that this is the right answer to your question!");
+        }
+        else {
+            state.correctAnswer = false;
+            await dc.context.sendActivity("Sorry to hear that! I'll use your feedback to better answer your questions in the future!");
+        }
+        addFAQ(state.questionText, state.answerText, state.correctAnswer);
+        await dc.end();
+        await dc.begin('MainMenuDialog');
+    }
+]);
+
+dialogs.add('MainMenuDialog', [
+    async function (dc) {
+        await dc.context.sendActivity(questionMessage);
+    },
+    async function (dc, results) {
+        if (dc.context.activity.type === 'message' && responseCheck(dc.context.activity.text)) {
+            if (results === 'FAQs') {
+                await dc.end();
+                await dc.begin('FAQDialog');
+            }
+            else if (results === 'Band Search') {
+                await dc.end();
+                await dc.begin('BSDialog');    
+            }
+
+        }
+    }
+]);
+
+dialogs.add('BSDialog', [
+    async function (dc) {
+        await dc.prompt('textPrompt', "What band would you like to search for?");
+    },
+    async function (dc, results) {
+        //Search and find the count to post plural response
+        
+        
+        await dc.end();
+        await dc.begin('MainMenuDialog');
+    }
+]);
+
+
+dialogs.add('textPrompt', new botbuilder_dialogs.TextPrompt());
+dialogs.add('choicePrompt', new botbuilder_dialogs.ChoicePrompt());
