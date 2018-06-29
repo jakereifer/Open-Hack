@@ -10,7 +10,7 @@ const botbuilder_dialogs = require('botbuilder-dialogs');
 import { DialogSet } from 'botbuilder-dialogs';
 const {CardFactory} = require('botbuilder');
 var AzureSearch = require('azure-search');
-var dia = require("./dialogs");
+
 // Create server
 let server = restify.createServer();
 server.listen(process.env.port || process.env.PORT || 3978, function () {
@@ -94,6 +94,7 @@ interface C1State {
     questionText: string;
     answerText: string;
     correctAnswer: boolean;
+    currentBands: Band[];
     //flags
     menuFlag: boolean;
     FAQFlag: boolean;
@@ -120,7 +121,7 @@ async function processQuestion(q: string): Promise<string> {
     return Promise.resolve(person);
 }
 
-const questionURL = 'https://openhackqnamaker-asbj2jawqzgtejk.search.windows.net/indexes/my-target-index/docs?api-version=2016-09-01&search=Milk';
+const questionURL = 'https://openhackqnamaker-asbj2jawqzgtejk.search.windows.net/indexes/my-target-index/docs?api-version=2016-09-01&search=';
 
 interface SearchAnswer {
     "@odata.context": string;
@@ -140,8 +141,8 @@ interface Band {
     "date": string
 }
 
-async function bandSearch(): Promise<SearchAnswer> {
-    var person: SearchAnswer = await fetch(questionURL, {
+async function bandSearch(band : string): Promise<Band[]> {
+    var bandlist: SearchAnswer = await fetch(questionURL+band, {
         method: 'GET',
         headers: {
             'api-key': "D4BD28224DB0862A9819C003C5D90F5B"
@@ -150,8 +151,8 @@ async function bandSearch(): Promise<SearchAnswer> {
     })
         .then(function (response) {
             return response.json();
-        })
-    return Promise.resolve(person);
+        });
+    return Promise.resolve(bandlist.value);
 }
 
 
@@ -168,9 +169,6 @@ server.post('/api/messages', (req, res) => {
         if (isWelcome(context)) {
             state.menuFlag = true;
             await context.sendActivity(welcomeMessage);
-            var searchResult = await bandSearch();
-            console.log(searchResult.value);
-            await context.sendActivity(searchResult.value[0].bandName);
             await dc.begin('MainMenuDialog');
         }
         if (!context.responded) {
@@ -178,6 +176,12 @@ server.post('/api/messages', (req, res) => {
         }
     });
 });
+
+
+
+
+
+
 
 
 
@@ -274,8 +278,42 @@ dialogs.add('BSDialog', [
     },
     async function (dc, results) {
         //Search and find the count to post plural response
+        var searchResult : Band[] = await bandSearch(results);
+        var state = conversationState.get(dc.context);
+        state.currentBands = searchResult;
+        if (searchResult.length === 1) {
+            await dc.context.sendActivity("Here is the show you are looking for!")
+            const message = MessageFactory.attachment(
+                CardFactory.heroCard(
+                    searchResult[0].bandName,
+                    `${searchResult[0].day}, ${searchResult[0].startTime} at the ${searchResult[0].stage} Stage`,
+                    [searchResult[0].imageUrl],
+                    ['Description','Back to Main Menu']
+                )
+            );
+            await dc.context.sendActivity(message);
+        }
+        else if (searchResult.length > 1) {
+            var l : number = searchResult.length;
+            var list = [];
+            for (var i : number = 0; i < l; i++) {
+                list[i] = CardFactory.heroCard(
+                    searchResult[i].bandName,
+                    `${searchResult[i].day}, ${searchResult[i].startTime} at the ${searchResult[i].stage} Stage`,
+                    [searchResult[i].imageUrl],
+                    ['Description','Back to Main Menu']
+                )
+            }
+            //caroussel
+            await dc.context.sendActivity(MessageFactory.carousel(list));
+        }
+        else {
+            await dc.context.sendActivity("There is no band by that title!");
+            dc.end();
+            dc.begin("MainMenuDialog")
+        }
         
-        
+        state.currentBands = [];
         await dc.end();
         await dc.begin('MainMenuDialog');
     }
