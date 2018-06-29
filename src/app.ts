@@ -309,10 +309,17 @@ dialogs.add('BSDialog', [
         }
         else {
             await dc.context.sendActivity("There is no band by that title!");
+            state.currentBands = [];
             dc.end();
             dc.begin("MainMenuDialog")
         }
-        
+    },
+    async function (dc, result) {
+        var state = conversationState.get(dc.context);
+        if (result === 'Description') {
+            console.log("Hello");
+            await dc.context.sendActivity(state.currentBands[0].description);
+        }
         state.currentBands = [];
         await dc.end();
         await dc.begin('MainMenuDialog');
