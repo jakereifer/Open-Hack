@@ -210,8 +210,8 @@ async function daySearch() : Promise<DGFacets> {
     return Promise.resolve(SA["@search.facets"]);
 }
 
-async function genreSearch() : Promise<DGFacets> {
-    var SA : SearchAnswer = await fetch(questionURL+'*&facet=genre', {
+async function genreSearch(day: string) : Promise<DGFacets> {
+    var SA : SearchAnswer = await fetch(questionURL+`*&%24filter=day%20eq%20'${day}'&facet=genre`, {
             method: 'GET',
             headers: {
                 'api-key': "D4BD28224DB0862A9819C003C5D90F5B"
@@ -392,7 +392,7 @@ dialogs.add('NavDialog', [
         var state = conversationState.get(dc.context);
         //await dc.context.sendActivity(`You said ${response}`);
         state.navDay = response;
-        var facetResults : DGFacets = await genreSearch();
+        var facetResults : DGFacets = await genreSearch(response);
         var genres = facetResults.genre;
         var list : string[] = [];
         for (var i = 0; i < genres.length; i++) {
